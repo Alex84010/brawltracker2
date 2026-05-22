@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brawl Stars Auto Tracker OFFICIAL</title>
+    <title>Brawl Stars Auto Tracker</title>
     <style>
         :root {
             --bg-color: #121214;
@@ -59,9 +59,9 @@
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Mise à jour automatique)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Suivi Automatique)</div>
 
-    <div id="loadingStatus" class="loading">Récupération des trophées en cours...</div>
+    <div id="loadingStatus" class="loading">Connexion aux serveurs de jeu...</div>
 
     <div id="setupBox" class="box">
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
@@ -70,16 +70,16 @@
     </div>
 
     <div id="statsBox" class="box" style="display: none;">
-        <div style="font-size: 18px; margin-bottom: 10px; color: var(--accent-color);">Statut du rush :</div>
+        <div style="font-size: 18px; margin-bottom: 10px; color: var(--accent-color); font-weight: bold;">Statut du rush :</div>
         <div>Joueur : <span id="statName" style="font-weight:bold; color: #fff;">-</span></div>
         <div>Trophées au départ : <span id="statStart" style="font-weight:bold;">0</span></div>
-        <div>Trophées en direct : <span id="statCurrent" style="font-weight:bold;">0</span></div>
-        <div id="finalResult" class="final-result"></div>
+        <div>Trophées actuels : <span id="statCurrent" style="font-weight:bold; color: var(--accent-color);">0</span></div>
+        <div id="finalResult" class="final-result" style="display: none;"></div>
     </div>
 
     <div class="grid" id="calendarGrid"></div>
 
-    <button id="btnReset" class="btn-reset" onclick="resetAll()" style="display: none;">Changer de compte / Reset</button>
+    <button id="btnReset" class="btn-reset" onclick="resetAll()" style="display: none;">Recommencer / Changer de compte</button>
 </div>
 
 <script>
@@ -107,31 +107,32 @@
         }
     }
 
-    // Récupération automatique via une API publique sans clé ni blocage
+    // Fonction magique qui récupère les données sans aucune clé et sans bug d'IP
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
         try {
-            // Utilisation de l'API publique brawlapi.com qui ne nécessite aucune configuration d'IP
-            let response = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
+            // Utilisation d'un proxy public et de l'API BrawlAPI
+            let url = `https://api.allorigins.win/get?url=${encodeURIComponent('https://api.brawlapi.com/v1/player?tag=' + cleanTag)}`;
+            let response = await fetch(url);
+            if (!response.ok) throw new Error();
             
-            if (!response.ok) throw new Error("Joueur introuvable");
+            let rawData = await response.json();
+            let data = JSON.parse(rawData.contents);
             
-            let data = await response.json();
             document.getElementById('loadingStatus').style.display = 'none';
-            
             return { trophies: data.trophies, name: data.name };
         } catch (error) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur : Impossible de récupérer les données du compte. Vérifie ton tag.");
+            alert("Erreur : Impossible de contacter l'API. Vérifie ton tag ou réessaie.");
             return null;
         }
     }
 
     async function startAutoChallenge() {
         let tagInput = document.getElementById('playerTag').value.trim();
-        if(!tagInput) return alert("Mets ton ID Brawl Stars !");
+        if(!tagInput) return alert("Indique ton ID Brawl Stars !");
         
         let playerData = await fetchTrophies(tagInput);
         if(!playerData) return;
@@ -162,11 +163,7 @@
     async function checkAndUpdateTrophies() {
         let today = new Date();
         today.setHours(0,0,0,0);
-        let nowTime = today.getTime();
-        let startTime = parseInt(startDate);
-
-        let diffTime = nowTime - startTime;
-        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        let elapsedDays = Math.floor((today.getTime() - parseInt(startDate)) / (1000 * 60 * 60 * 24)) + 1;
 
         let playerData = await fetchTrophies(playerTag);
         if(!playerData) return;
@@ -190,11 +187,12 @@
         document.getElementById('statStart').innerText = startTrophies + " tr";
         document.getElementById('statCurrent').innerText = liveTrophies + " tr";
         
-        let lastDayEntered = currentDay - 1;
-        if(currentDay > 30 || lastDayEntered === 30) {
+        if (currentDay > 30) {
             let finalScore = history[30] || liveTrophies;
             let totalGagne = finalScore - startTrophies;
             let finalBox = document.getElementById('finalResult');
+            finalBox.style.display = "block";
+            
             if(totalGagne >= 30000) {
                 finalBox.innerText = `Gagné ! +${totalGagne} tr 🔥`;
                 finalBox.className = "final-result green";
@@ -202,9 +200,6 @@
                 finalBox.innerText = `Échec ! +${totalGagne} tr / 30000 💀`;
                 finalBox.className = "final-result red";
             }
-        } else {
-            document.getElementById('finalResult').innerText = "Défi en cours...";
-            document.getElementById('finalResult').className = "final-result";
         }
     }
 
@@ -247,7 +242,7 @@
     }
 
     function resetAll() {
-        if(confirm("Tu veux reset le tracker et changer de compte ?")) {
+        if(confirm("Tu veux vraiment tout réinitialiser ?")) {
             localStorage.clear();
             location.reload();
         }
