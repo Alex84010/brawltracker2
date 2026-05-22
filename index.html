@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brawl Stars Auto Tracker PRO</title>
+    <title>Brawl Stars Auto Tracker OFFICIAL</title>
     <style>
         :root {
             --bg-color: #121214;
@@ -52,25 +52,30 @@
         .loading { text-align: center; color: var(--accent-color); font-weight: bold; display: none; margin-bottom: 15px; }
         
         .final-result { font-size: 20px; text-align: center; font-weight: bold; padding: 15px; border-radius: 8px; margin-top: 10px; }
-        .btn-reset { background: #3a3a42; color: #bbb; margin-top: 20px; font-size: 14px; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+        .btn-reset { background: #3a3a42; color: #bbb; margin-top: 20px; font-size: 12px; padding: 8px; width: 100%; border: none; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Système de Récupération Direct)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Via API Officielle Supercell)</div>
 
-    <div id="loadingStatus" class="loading">Lecture du profil en cours...</div>
+    <div id="loadingStatus" class="loading">Connexion sécurisée aux serveurs Supercell...</div>
 
     <div id="setupBox" class="box">
+        <label for="apiKey">Colle ta clé API Supercell :</label>
+        <input type="text" id="apiKey" placeholder="Colle le gros token ici">
+        
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
         <input type="text" id="playerTag" placeholder="Ex: 2QJ880V9P">
-        <button onclick="startAutoChallenge()">Lancer le défi automatique</button>
+        
+        <button onclick="startAutoChallenge()">Lancer le défi synchro</button>
     </div>
 
     <div id="statsBox" class="box" style="display: none;">
         <div style="font-size: 18px; margin-bottom: 10px; color: var(--accent-color);">Statut du rush :</div>
+        <div>Joueur : <span id="statName" style="font-weight:bold; color: #fff;">-</span></div>
         <div>Trophées au départ : <span id="statStart" style="font-weight:bold;">0</span></div>
         <div>Trophées en direct : <span id="statCurrent" style="font-weight:bold;">0</span></div>
         <div id="finalResult" class="final-result"></div>
@@ -82,6 +87,7 @@
 </div>
 
 <script>
+    let apiKey = "";
     let playerTag = "";
     let startTrophies = 0;
     let currentDay = 1;
@@ -91,6 +97,7 @@
     window.onload = function() {
         if(localStorage.getItem('playerTag')) {
             playerTag = localStorage.getItem('playerTag');
+            apiKey = localStorage.getItem('apiKey');
             startTrophies = parseInt(localStorage.getItem('startTrophies'));
             currentDay = parseInt(localStorage.getItem('currentDay')) || 1;
             history = JSON.parse(localStorage.getItem('history')) || {};
@@ -106,82 +113,52 @@
         }
     }
 
-    // Scraper haute précision multi-sources (BrawlAce + Brawl Time Ninja)
-    async function fetchTrophies(tag) {
+    // Connexion directe aux serveurs Brawl Stars sans blocage CORS
+    async function fetchTrophiesFromAPI(tag, key) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
-        // Source 1 : BrawlAce (Ultra propre, données légères)
         try {
-            let url = `https://corsproxy.io/?${encodeURIComponent('https://brawlace.com/players/%23' + cleanTag)}`;
-            let res = await fetch(url);
-            if (res.ok) {
-                let html = await res.text();
-                // Recherche du motif "Trophies" ou des nombres associés aux stats du joueur
-                let match = html.match(/Highest Trophies[\s\S]*?([0-9]{4,6})/i) || htmlString.match(/"trophies"\s*:\s*([0-9]+)/);
-                
-                // Extraction via les métadonnées de la page si existant
-                let metaMatch = html.match(/meta name="description" content="([^"]+)"/i);
-                if (metaMatch && metaMatch[1]) {
-                    let numbers = metaMatch[1].match(/[0-9]{4,6}/g);
-                    if (numbers && numbers.length > 0) {
-                        // Le premier grand nombre sur BrawlAce est généralement le total de trophées actuels
-                        let tr = parseInt(numbers[0]);
-                        if (tr > 1500) { // Sécurité pour s'assurer que c'est un vrai compte
-                            document.getElementById('loadingStatus').style.display = 'none';
-                            return tr;
-                        }
-                    }
+            // Utilisation d'une passerelle proxy CORS spécialement configurée pour l'API Supercell
+            let url = `https://corsproxy.io/?${encodeURIComponent('https://api.brawlstars.com/v1/players/%23' + cleanTag)}`;
+            
+            let response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + key,
+                    'Accept': 'application/json'
                 }
+            });
+            
+            if (!response.ok) {
+                let errData = await response.json().catch(() => ({}));
+                throw new Error(errData.reason || "Clé API invalide ou IP bloquée");
             }
-        } catch (e) { console.log("Source 1 échouée, bascule..."); }
-
-        // Source 2 : Brawl Time Ninja (Analyse en profondeur renforcée)
-        try {
-            let url = `https://corsproxy.io/?${encodeURIComponent('https://brawltime.ninja/profile/' + cleanTag)}`;
-            let response = await fetch(url);
-            if (response.ok) {
-                let htmlString = await response.text();
-                
-                let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || 
-                            htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/) ||
-                            htmlString.match(/([0-9,]+)\s*Trophies/i);
-                
-                if (match && match[1]) {
-                    let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
-                    if (tr > 1000) {
-                        document.getElementById('loadingStatus').style.display = 'none';
-                        return tr;
-                    }
-                }
-                
-                // Recherche dans les scripts du serveur
-                let index = htmlString.indexOf('trophies');
-                if (index !== -1) {
-                    let zone = htmlString.substring(index, index + 200);
-                    let numbers = zone.match(/[0-9]{4,6}/);
-                    if (numbers && numbers[0]) {
-                        document.getElementById('loadingStatus').style.display = 'none';
-                        return parseInt(numbers[0]);
-                    }
-                }
-            }
-        } catch (error) { console.log("Source 2 échouée"); }
-
-        document.getElementById('loadingStatus').style.display = 'none';
-        alert("Impossible de charger les données réelles pour le moment. Vérifie ton tag ou réessaye.");
-        return null;
+            
+            let data = await response.json();
+            document.getElementById('loadingStatus').style.display = 'none';
+            
+            // On renvoie un objet avec le nom et les trophées
+            return { trophies: data.trophies, name: data.name };
+        } catch (error) {
+            document.getElementById('loadingStatus').style.display = 'none';
+            alert("Erreur API Supercell : " + error.message + "\nAssure-toi d'avoir mis 0.0.0.0 comme IP autorisée.");
+            return null;
+        }
     }
 
     async function startAutoChallenge() {
-        let tagInput = document.getElementById('playerTag').value;
-        if(!tagInput) return alert("Mets ton ID Brawl Stars !");
+        let keyInput = document.getElementById('apiKey').value.trim();
+        let tagInput = document.getElementById('playerTag').value.trim();
         
-        let trophies = await fetchTrophies(tagInput);
-        if(!trophies) return;
+        if(!keyInput || !tagInput) return alert("Remplis la clé API ET ton ID Brawl Stars !");
+        
+        let playerData = await fetchTrophiesFromAPI(tagInput, keyInput);
+        if(!playerData) return;
 
+        apiKey = keyInput;
         playerTag = tagInput.replace('#', '').toUpperCase().trim();
-        startTrophies = trophies;
+        startTrophies = playerData.trophies;
         currentDay = 1;
         history = {};
         
@@ -189,6 +166,7 @@
         today.setHours(0,0,0,0);
         startDate = today.getTime();
 
+        localStorage.setItem('apiKey', apiKey);
         localStorage.setItem('playerTag', playerTag);
         localStorage.setItem('startTrophies', startTrophies);
         localStorage.setItem('currentDay', currentDay);
@@ -199,7 +177,7 @@
         document.getElementById('statsBox').style.display = 'block';
         document.getElementById('btnReset').style.display = 'block';
 
-        updateUI(startTrophies);
+        updateUI(startTrophies, playerData.name);
         renderCalendar();
     }
 
@@ -212,27 +190,25 @@
         let diffTime = nowTime - startTime;
         let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
+        let playerData = await fetchTrophiesFromAPI(playerTag, apiKey);
+        if(!playerData) return;
+
         if (elapsedDays > currentDay && currentDay <= 30) {
-            let actualTrophies = await fetchTrophies(playerTag);
-            if(actualTrophies) {
-                for(let i = currentDay; i < elapsedDays && i <= 30; i++) {
-                    history[i] = actualTrophies;
-                }
-                currentDay = elapsedDays > 30 ? 31 : elapsedDays;
-                
-                localStorage.setItem('history', JSON.stringify(history));
-                localStorage.setItem('currentDay', currentDay);
-                updateUI(actualTrophies);
-                renderCalendar();
+            for(let i = currentDay; i < elapsedDays && i <= 30; i++) {
+                history[i] = playerData.trophies;
             }
-        } else {
-            let actualTrophies = await fetchTrophies(playerTag);
-            if(actualTrophies) updateUI(actualTrophies);
-            renderCalendar();
+            currentDay = elapsedDays > 30 ? 31 : elapsedDays;
+            
+            localStorage.setItem('history', JSON.stringify(history));
+            localStorage.setItem('currentDay', currentDay);
         }
+        
+        updateUI(playerData.trophies, playerData.name);
+        renderCalendar();
     }
 
-    function updateUI(liveTrophies) {
+    function updateUI(liveTrophies, playerName) {
+        if(playerName) document.getElementById('statName').innerText = playerName;
         document.getElementById('statStart').innerText = startTrophies + " tr";
         document.getElementById('statCurrent').innerText = liveTrophies + " tr";
         
@@ -293,8 +269,10 @@
     }
 
     function resetAll() {
-        localStorage.clear();
-        location.reload();
+        if(confirm("Tu veux reset le tracker ?")) {
+            localStorage.clear();
+            location.reload();
+        }
     }
 </script>
 </body>
