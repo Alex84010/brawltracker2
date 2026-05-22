@@ -58,28 +58,27 @@
 <body>
 
 <div class="container">
-    <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Suivi Automatique)</div>
+    <h1>BRAWL RUSH AUTOMATIQUÉ</h1>
+    <div class="subtitle">Objectif : +1000 tr/jour (Suivi sans clé)</div>
 
-    <div id="loadingStatus" class="loading">Connexion aux serveurs de jeu...</div>
+    <div id="loadingStatus" class="loading">Mise à jour des trophées en cours...</div>
 
     <div id="setupBox" class="box">
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
         <input type="text" id="playerTag" placeholder="Ex: 2QJ880V9P">
-        <button onclick="startAutoChallenge()">Lancer le défi automatique</button>
+        <button onclick="startAutoChallenge()">Démarrer le défi</button>
     </div>
 
     <div id="statsBox" class="box" style="display: none;">
         <div style="font-size: 18px; margin-bottom: 10px; color: var(--accent-color); font-weight: bold;">Statut du rush :</div>
-        <div>Joueur : <span id="statName" style="font-weight:bold; color: #fff;">-</span></div>
         <div>Trophées au départ : <span id="statStart" style="font-weight:bold;">0</span></div>
-        <div>Trophées actuels : <span id="statCurrent" style="font-weight:bold; color: var(--accent-color);">0</span></div>
+        <div>Trophées actuels : <span id="statCurrent" style="font-weight:bold; color: var(--accent-color);">-</span></div>
         <div id="finalResult" class="final-result" style="display: none;"></div>
     </div>
 
     <div class="grid" id="calendarGrid"></div>
 
-    <button id="btnReset" class="btn-reset" onclick="resetAll()" style="display: none;">Recommencer / Changer de compte</button>
+    <button id="btnReset" class="btn-reset" onclick="resetAll()" style="display: none;">Recommencer le défi</button>
 </div>
 
 <script>
@@ -107,26 +106,30 @@
         }
     }
 
-    // Fonction magique qui récupère les données sans aucune clé et sans bug d'IP
+    // Récupère les données via une méthode alternative stable
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
         try {
-            // Utilisation d'un proxy public et de l'API BrawlAPI
-            let url = `https://api.allorigins.win/get?url=${encodeURIComponent('https://api.brawlapi.com/v1/player?tag=' + cleanTag)}`;
-            let response = await fetch(url);
+            let response = await fetch(`https://api.brawlify.com/v1/player?tag=${cleanTag}`);
             if (!response.ok) throw new Error();
             
-            let rawData = await response.json();
-            let data = JSON.parse(rawData.contents);
-            
+            let data = await response.json();
             document.getElementById('loadingStatus').style.display = 'none';
-            return { trophies: data.trophies, name: data.name };
+            return { trophies: data.trophies };
         } catch (error) {
-            document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur : Impossible de contacter l'API. Vérifie ton tag ou réessaie.");
-            return null;
+            // Deuxième chance si le premier serveur tousse
+            try {
+                let backupRes = await fetch(`https://corsproxy.io/?${encodeURIComponent('https://api.brawlapi.com/v1/player?tag=' + cleanTag)}`);
+                let backupData = await backupRes.json();
+                document.getElementById('loadingStatus').style.display = 'none';
+                return { trophies: backupData.trophies };
+            } catch (e) {
+                document.getElementById('loadingStatus').style.display = 'none';
+                alert("Erreur de connexion. Vérifie ton tag ou réessaie dans quelques instants.");
+                return null;
+            }
         }
     }
 
@@ -156,7 +159,7 @@
         document.getElementById('statsBox').style.display = 'block';
         document.getElementById('btnReset').style.display = 'block';
 
-        updateUI(startTrophies, playerData.name);
+        updateUI(startTrophies);
         renderCalendar();
     }
 
@@ -178,12 +181,11 @@
             localStorage.setItem('currentDay', currentDay);
         }
         
-        updateUI(playerData.trophies, playerData.name);
+        updateUI(playerData.trophies);
         renderCalendar();
     }
 
-    function updateUI(liveTrophies, playerName) {
-        if(playerName) document.getElementById('statName').innerText = playerName;
+    function updateUI(liveTrophies) {
         document.getElementById('statStart').innerText = startTrophies + " tr";
         document.getElementById('statCurrent').innerText = liveTrophies + " tr";
         
@@ -242,7 +244,7 @@
     }
 
     function resetAll() {
-        if(confirm("Tu veux vraiment tout réinitialiser ?")) {
+        if(confirm("Tu veux tout réinitialiser et recommencer à zéro ?")) {
             localStorage.clear();
             location.reload();
         }
