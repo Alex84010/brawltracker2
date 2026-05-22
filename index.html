@@ -52,14 +52,14 @@
         .loading { text-align: center; color: var(--accent-color); font-weight: bold; display: none; margin-bottom: 15px; }
         
         .final-result { font-size: 20px; text-align: center; font-weight: bold; padding: 15px; border-radius: 8px; margin-top: 10px; }
-        .btn-reset { background: #3a3a42; color: #bbb; margin-top: 20px; font-size: 12px; padding: 8px; }
+        .btn-reset { background: #3a3a42; color: #bbb; margin-top: 20px; font-size: 14px; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; text-transform: uppercase; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Système Direct Sans Clé)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Système de Récupération Direct)</div>
 
     <div id="loadingStatus" class="loading">Lecture du profil en cours...</div>
 
@@ -106,62 +106,71 @@
         }
     }
 
-    // Système d'extraction multi-sources ultra résistant
+    // Scraper haute précision multi-sources (BrawlAce + Brawl Time Ninja)
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
+        // Source 1 : BrawlAce (Ultra propre, données légères)
         try {
-            let targetUrl = 'https://brawltime.ninja/profile/' + cleanTag;
-            // Étape 1 : Appel via le proxy principal
-            let response = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-            
-            if (!response.ok) throw new Error("Erreur passerelle");
-            
-            let htmlString = await response.text();
-            
-            // Étape 2 : Analyse du HTML reçu
-            let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || 
-                        htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/) ||
-                        htmlString.match(/([0-9,]+)\s*Trophies/i);
-            
-            if (match && match[1]) {
-                let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
-                document.getElementById('loadingStatus').style.display = 'none';
-                return tr;
-            }
-
-            // Étape 3 : Recherche approfondie dans la structure des scripts de la page
-            let index = htmlString.indexOf('trophies');
-            if (index !== -1) {
-                let zone = htmlString.substring(index, index + 150);
-                let numbers = zone.match(/[0-9]{4,6}/);
-                if (numbers && numbers[0]) {
-                    document.getElementById('loadingStatus').style.display = 'none';
-                    return parseInt(numbers[0]);
+            let url = `https://corsproxy.io/?${encodeURIComponent('https://brawlace.com/players/%23' + cleanTag)}`;
+            let res = await fetch(url);
+            if (res.ok) {
+                let html = await res.text();
+                // Recherche du motif "Trophies" ou des nombres associés aux stats du joueur
+                let match = html.match(/Highest Trophies[\s\S]*?([0-9]{4,6})/i) || htmlString.match(/"trophies"\s*:\s*([0-9]+)/);
+                
+                // Extraction via les métadonnées de la page si existant
+                let metaMatch = html.match(/meta name="description" content="([^"]+)"/i);
+                if (metaMatch && metaMatch[1]) {
+                    let numbers = metaMatch[1].match(/[0-9]{4,6}/g);
+                    if (numbers && numbers.length > 0) {
+                        // Le premier grand nombre sur BrawlAce est généralement le total de trophées actuels
+                        let tr = parseInt(numbers[0]);
+                        if (tr > 1500) { // Sécurité pour s'assurer que c'est un vrai compte
+                            document.getElementById('loadingStatus').style.display = 'none';
+                            return tr;
+                        }
+                    }
                 }
             }
-            
-            throw new Error("Données introuvables");
-        } catch (error) {
-            // Plan de secours ultime via le deuxième proxy
-            try {
-                let targetUrl = 'https://brawltime.ninja/profile/' + cleanTag;
-                let fallbackRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-                let rawData = await fallbackRes.json();
-                let htmlString = rawData.contents;
-                let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || htmlString.match(/([0-9,]+)\s*Trophies/i);
+        } catch (e) { console.log("Source 1 échouée, bascule..."); }
+
+        // Source 2 : Brawl Time Ninja (Analyse en profondeur renforcée)
+        try {
+            let url = `https://corsproxy.io/?${encodeURIComponent('https://brawltime.ninja/profile/' + cleanTag)}`;
+            let response = await fetch(url);
+            if (response.ok) {
+                let htmlString = await response.text();
+                
+                let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || 
+                            htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/) ||
+                            htmlString.match(/([0-9,]+)\s*Trophies/i);
+                
                 if (match && match[1]) {
                     let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
-                    document.getElementById('loadingStatus').style.display = 'none';
-                    return tr;
+                    if (tr > 1000) {
+                        document.getElementById('loadingStatus').style.display = 'none';
+                        return tr;
+                    }
                 }
-            } catch(e) {}
+                
+                // Recherche dans les scripts du serveur
+                let index = htmlString.indexOf('trophies');
+                if (index !== -1) {
+                    let zone = htmlString.substring(index, index + 200);
+                    let numbers = zone.match(/[0-9]{4,6}/);
+                    if (numbers && numbers[0]) {
+                        document.getElementById('loadingStatus').style.display = 'none';
+                        return parseInt(numbers[0]);
+                    }
+                }
+            }
+        } catch (error) { console.log("Source 2 échouée"); }
 
-            document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur de synchronisation. Vérifie ton ID ou réessaye dans quelques instants.");
-            return null;
-        }
+        document.getElementById('loadingStatus').style.display = 'none';
+        alert("Impossible de charger les données réelles pour le moment. Vérifie ton tag ou réessaye.");
+        return null;
     }
 
     async function startAutoChallenge() {
@@ -284,10 +293,8 @@
     }
 
     function resetAll() {
-        if(confirm("Tu veux arrêter ce défi et changer de compte ?")) {
-            localStorage.clear();
-            location.reload();
-        }
+        localStorage.clear();
+        location.reload();
     }
 </script>
 </body>
