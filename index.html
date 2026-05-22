@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brawl Stars Auto Tracker</title>
+    <title>Brawl Stars Auto Tracker PRO</title>
     <style>
         :root {
             --bg-color: #121214;
@@ -59,9 +59,9 @@
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Auto à minuit)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Serveur dédié Privé)</div>
 
-    <div id="loadingStatus" class="loading">Mise à jour des trophées en cours...</div>
+    <div id="loadingStatus" class="loading">Connexion à ton serveur privé...</div>
 
     <div id="setupBox" class="box">
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
@@ -82,6 +82,9 @@
 </div>
 
 <script>
+    // ⚠️ METS ICI L'URL DE TON SERVEUR APRES DEPLOIEMENT (Ex: https://mon-projet.vercel.app)
+    const monServeurUrl = "https://TON-APPLICATION-SERVEUR.vercel.app/api/brawlstars";
+
     let playerTag = "";
     let startTrophies = 0;
     let currentDay = 1;
@@ -100,26 +103,31 @@
             document.getElementById('statsBox').style.display = 'block';
             document.getElementById('btnReset').style.display = 'block';
             
-            // À chaque ouverture, on vérifie si on a changé de jour pour mettre à jour
             checkAndUpdateTrophies();
         } else {
             renderCalendar();
         }
     }
 
-    // Fonction magique : appelle l'API libre BrawlAPI sans clé !
+    // APPEL STABLE A TON PROPRE SERVEUR
     async function fetchTrophies(tag) {
-        // Nettoyage du tag au cas où il y a un #
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
+        
         try {
             document.getElementById('loadingStatus').style.display = 'block';
-            let response = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
+            let response = await fetch(`${monServeurUrl}?tag=${cleanTag}`);
+
+            if (!response.ok) {
+                throw new Error("Le serveur privé a renvoyé une erreur. Vérifie ton Token Supercell.");
+            }
+            
             let data = await response.json();
             document.getElementById('loadingStatus').style.display = 'none';
             return data.trophies;
+
         } catch (error) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur de connexion avec BrawlAPI. Vérifie ton ID ou ta connexion.");
+            alert("Erreur Serveur Privé : " + error.message);
             return null;
         }
     }
@@ -129,14 +137,13 @@
         if(!tagInput) return alert("Mets ton ID Brawl Stars !");
         
         let trophies = await fetchTrophies(tagInput);
-        if(!trophies) return; // Erreur API
+        if(!trophies) return;
 
         playerTag = tagInput.replace('#', '').toUpperCase().trim();
         startTrophies = trophies;
         currentDay = 1;
         history = {};
         
-        // On fixe le jour de départ (aujourd'hui sans les heures)
         let today = new Date();
         today.setHours(0,0,0,0);
         startDate = today.getTime();
@@ -161,15 +168,12 @@
         let nowTime = today.getTime();
         let startTime = parseInt(startDate);
 
-        // Calculer combien de jours se sont écoulés depuis le début
         let diffTime = nowTime - startTime;
-        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Ex: Jour 1, Jour 2...
+        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-        // Si on a avancé d'un ou plusieurs jours par rapport à notre dernier "currentDay" enregistré
         if (elapsedDays > currentDay && currentDay <= 30) {
             let actualTrophies = await fetchTrophies(playerTag);
             if(actualTrophies) {
-                // On remplit les jours manqués ou le jour actuel avec les tr récupérés à minuit
                 for(let i = currentDay; i < elapsedDays && i <= 30; i++) {
                     history[i] = actualTrophies;
                 }
@@ -181,7 +185,6 @@
                 renderCalendar();
             }
         } else {
-            // Même jour : on met juste à jour tes trophées actuels "en direct" pour info
             let actualTrophies = await fetchTrophies(playerTag);
             if(actualTrophies) updateUI(actualTrophies);
             renderCalendar();
@@ -198,7 +201,7 @@
             let totalGagne = finalScore - startTrophies;
             let finalBox = document.getElementById('finalResult');
             if(totalGagne >= 30000) {
-                finalBox.innerText = `Gagné ! +${totalGagne} tr du futur 🔥`;
+                finalBox.innerText = `Gagné ! +${totalGagne} tr 🔥`;
                 finalBox.className = "final-result green";
             } else {
                 finalBox.innerText = `Échec ! +${totalGagne} tr / 30000 💀`;
