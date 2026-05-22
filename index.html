@@ -59,9 +59,9 @@
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Serveur dédié Privé)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Système Direct Sans Clé)</div>
 
-    <div id="loadingStatus" class="loading">Connexion à ton serveur privé...</div>
+    <div id="loadingStatus" class="loading">Lecture du profil en cours...</div>
 
     <div id="setupBox" class="box">
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
@@ -82,9 +82,6 @@
 </div>
 
 <script>
-    // URL connectée à ton serveur Vercel tout neuf !
-    const monServeurUrl = "https://brawltracker2.vercel.app/api/brawlstars";
-
     let playerTag = "";
     let startTrophies = 0;
     let currentDay = 1;
@@ -109,25 +106,39 @@
         }
     }
 
-    // Appel ultra stable sans aucun proxy tiers
+    // Récupération directe via scraper Brawl Time Ninja sans token d'IP
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
+        document.getElementById('loadingStatus').style.display = 'block';
         
         try {
-            document.getElementById('loadingStatus').style.display = 'block';
-            let response = await fetch(`${monServeurUrl}?tag=${cleanTag}`);
-
-            if (!response.ok) {
-                throw new Error("Erreur serveur. Assure-toi que l'IP de la clé est bien 0.0.0.0 sur Supercell.");
-            }
+            // Utilisation d'un utilitaire de scraping public pour extraire les tr du site Brawl Time Ninja
+            let response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://brawltime.ninja/profile/' + cleanTag)}`);
+            if (!response.ok) throw new Error("Erreur de connexion");
             
-            let data = await response.json();
-            document.getElementById('loadingStatus').style.display = 'none';
-            return data.trophies;
-
+            let rawData = await response.json();
+            let htmlString = rawData.contents;
+            
+            // On extrait le nombre de trophées directement écrit dans le texte du site
+            let match = htmlString.match(/"trophies":\s*([0-9]+)/) || htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/);
+            
+            if (match && match[1]) {
+                let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
+                document.getElementById('loadingStatus').style.display = 'none';
+                return tr;
+            } else {
+                // Deuxième tentative sur une autre section du site si la structure a changé
+                let fallbackMatch = htmlString.match(/([0-9,.\s]+)\s*Trophies/i);
+                if (fallbackMatch && fallbackMatch[1]) {
+                    let tr = parseInt(fallbackMatch[1].replace(/[^0-9]/g, ''));
+                    document.getElementById('loadingStatus').style.display = 'none';
+                    return tr;
+                }
+                throw new Error("Impossible de lire les trophées. Vérifie ton ID.");
+            }
         } catch (error) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur Serveur : " + error.message);
+            alert("Erreur de synchronisation : " + error.message);
             return null;
         }
     }
