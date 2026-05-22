@@ -106,52 +106,51 @@
         }
     }
 
-    // Récupération directe via un proxy CORS stable et alternatif
+    // Système d'extraction multi-sources ultra résistant
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
         try {
-            // Changement de passerelle pour éviter le "Failed to fetch"
             let targetUrl = 'https://brawltime.ninja/profile/' + cleanTag;
-            let response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+            // Étape 1 : Appel via le proxy principal
+            let response = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
             
-            // Si allorigins boude encore, on tente immédiatement le plan B automatique
-            if (!response.ok) {
-                response = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-            }
+            if (!response.ok) throw new Error("Erreur passerelle");
             
-            let rawData = await response.json();
-            // Allorigins met le contenu dans .contents, corsproxy.io renvoie parfois différemment, on gère les deux
-            let htmlString = rawData.contents || rawData;
+            let htmlString = await response.text();
             
-            if (typeof htmlString !== 'string') {
-                htmlString = JSON.stringify(htmlString);
-            }
-            
-            // Extraction du nombre de trophées
-            let match = htmlString.match(/"trophies":\s*([0-9]+)/) || htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/);
+            // Étape 2 : Analyse du HTML reçu
+            let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || 
+                        htmlString.match(/Trophies<\/th>\s*<td>\s*([0-9\s,]+)/) ||
+                        htmlString.match(/([0-9,]+)\s*Trophies/i);
             
             if (match && match[1]) {
                 let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
                 document.getElementById('loadingStatus').style.display = 'none';
                 return tr;
-            } else {
-                let fallbackMatch = htmlString.match(/([0-9,.\s]+)\s*Trophies/i);
-                if (fallbackMatch && fallbackMatch[1]) {
-                    let tr = parseInt(fallbackMatch[1].replace(/[^0-9]/g, ''));
-                    document.getElementById('loadingStatus').style.display = 'none';
-                    return tr;
-                }
-                throw new Error("Structure de page modifiée. Réessaie.");
             }
+
+            // Étape 3 : Recherche approfondie dans la structure des scripts de la page
+            let index = htmlString.indexOf('trophies');
+            if (index !== -1) {
+                let zone = htmlString.substring(index, index + 150);
+                let numbers = zone.match(/[0-9]{4,6}/);
+                if (numbers && numbers[0]) {
+                    document.getElementById('loadingStatus').style.display = 'none';
+                    return parseInt(numbers[0]);
+                }
+            }
+            
+            throw new Error("Données introuvables");
         } catch (error) {
-            // Tentative ultime de secours avec corsproxy.io direct si tout plante
+            // Plan de secours ultime via le deuxième proxy
             try {
                 let targetUrl = 'https://brawltime.ninja/profile/' + cleanTag;
-                let response = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-                let htmlString = await response.text();
-                let match = htmlString.match(/"trophies":\s*([0-9]+)/) || htmlString.match(/([0-9,.\s]+)\s*Trophies/i);
+                let fallbackRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+                let rawData = await fallbackRes.json();
+                let htmlString = rawData.contents;
+                let match = htmlString.match(/"trophies"\s*:\s*([0-9]+)/) || htmlString.match(/([0-9,]+)\s*Trophies/i);
                 if (match && match[1]) {
                     let tr = parseInt(match[1].replace(/[^0-9]/g, ''));
                     document.getElementById('loadingStatus').style.display = 'none';
@@ -160,11 +159,11 @@
             } catch(e) {}
 
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur de synchronisation : " + error.message);
+            alert("Erreur de synchronisation. Vérifie ton ID ou réessaye dans quelques instants.");
             return null;
         }
     }
-    
+
     async function startAutoChallenge() {
         let tagInput = document.getElementById('playerTag').value;
         if(!tagInput) return alert("Mets ton ID Brawl Stars !");
