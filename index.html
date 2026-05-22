@@ -82,8 +82,8 @@
 </div>
 
 <script>
-    // ⚠️ METS ICI L'URL DE TON SERVEUR APRES DEPLOIEMENT (Ex: https://mon-projet.vercel.app)
-    const monServeurUrl = "https://TON-APPLICATION-SERVEUR.vercel.app/api/brawlstars";
+    // URL connectée à ton serveur Vercel tout neuf !
+    const monServeurUrl = "https://brawltracker2.vercel.app/api/brawlstars";
 
     let playerTag = "";
     let startTrophies = 0;
@@ -109,7 +109,7 @@
         }
     }
 
-    // APPEL STABLE A TON PROPRE SERVEUR
+    // Appel ultra stable sans aucun proxy tiers
     async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         
@@ -118,7 +118,7 @@
             let response = await fetch(`${monServeurUrl}?tag=${cleanTag}`);
 
             if (!response.ok) {
-                throw new Error("Le serveur privé a renvoyé une erreur. Vérifie ton Token Supercell.");
+                throw new Error("Erreur serveur. Assure-toi que l'IP de la clé est bien 0.0.0.0 sur Supercell.");
             }
             
             let data = await response.json();
@@ -127,7 +127,7 @@
 
         } catch (error) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur Serveur Privé : " + error.message);
+            alert("Erreur Serveur : " + error.message);
             return null;
         }
     }
