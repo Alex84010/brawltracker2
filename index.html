@@ -59,18 +59,14 @@
 
 <div class="container">
     <h1>BRAWL AUTO RUSH</h1>
-    <div class="subtitle">Objectif : +1000 tr/jour (Via API Officielle Supercell)</div>
+    <div class="subtitle">Objectif : +1000 tr/jour (Mise à jour automatique)</div>
 
-    <div id="loadingStatus" class="loading">Connexion sécurisée aux serveurs Supercell...</div>
+    <div id="loadingStatus" class="loading">Récupération des trophées en cours...</div>
 
     <div id="setupBox" class="box">
-        <label for="apiKey">Colle ta clé API Supercell :</label>
-        <input type="text" id="apiKey" placeholder="Colle le gros token ici">
-        
         <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
         <input type="text" id="playerTag" placeholder="Ex: 2QJ880V9P">
-        
-        <button onclick="startAutoChallenge()">Lancer le défi synchro</button>
+        <button onclick="startAutoChallenge()">Lancer le défi automatique</button>
     </div>
 
     <div id="statsBox" class="box" style="display: none;">
@@ -87,7 +83,6 @@
 </div>
 
 <script>
-    let apiKey = "";
     let playerTag = "";
     let startTrophies = 0;
     let currentDay = 1;
@@ -97,7 +92,6 @@
     window.onload = function() {
         if(localStorage.getItem('playerTag')) {
             playerTag = localStorage.getItem('playerTag');
-            apiKey = localStorage.getItem('apiKey');
             startTrophies = parseInt(localStorage.getItem('startTrophies'));
             currentDay = parseInt(localStorage.getItem('currentDay')) || 1;
             history = JSON.parse(localStorage.getItem('history')) || {};
@@ -113,50 +107,35 @@
         }
     }
 
-    // Connexion directe aux serveurs Brawl Stars sans blocage CORS
-    async function fetchTrophiesFromAPI(tag, key) {
+    // Récupération automatique via une API publique sans clé ni blocage
+    async function fetchTrophies(tag) {
         let cleanTag = tag.replace('#', '').toUpperCase().trim();
         document.getElementById('loadingStatus').style.display = 'block';
         
         try {
-            // Utilisation d'une passerelle proxy CORS spécialement configurée pour l'API Supercell
-            let url = `https://corsproxy.io/?${encodeURIComponent('https://api.brawlstars.com/v1/players/%23' + cleanTag)}`;
+            // Utilisation de l'API publique brawlapi.com qui ne nécessite aucune configuration d'IP
+            let response = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
             
-            let response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + key,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                let errData = await response.json().catch(() => ({}));
-                throw new Error(errData.reason || "Clé API invalide ou IP bloquée");
-            }
+            if (!response.ok) throw new Error("Joueur introuvable");
             
             let data = await response.json();
             document.getElementById('loadingStatus').style.display = 'none';
             
-            // On renvoie un objet avec le nom et les trophées
             return { trophies: data.trophies, name: data.name };
         } catch (error) {
             document.getElementById('loadingStatus').style.display = 'none';
-            alert("Erreur API Supercell : " + error.message + "\nAssure-toi d'avoir mis 0.0.0.0 comme IP autorisée.");
+            alert("Erreur : Impossible de récupérer les données du compte. Vérifie ton tag.");
             return null;
         }
     }
 
     async function startAutoChallenge() {
-        let keyInput = document.getElementById('apiKey').value.trim();
         let tagInput = document.getElementById('playerTag').value.trim();
+        if(!tagInput) return alert("Mets ton ID Brawl Stars !");
         
-        if(!keyInput || !tagInput) return alert("Remplis la clé API ET ton ID Brawl Stars !");
-        
-        let playerData = await fetchTrophiesFromAPI(tagInput, keyInput);
+        let playerData = await fetchTrophies(tagInput);
         if(!playerData) return;
 
-        apiKey = keyInput;
         playerTag = tagInput.replace('#', '').toUpperCase().trim();
         startTrophies = playerData.trophies;
         currentDay = 1;
@@ -166,7 +145,6 @@
         today.setHours(0,0,0,0);
         startDate = today.getTime();
 
-        localStorage.setItem('apiKey', apiKey);
         localStorage.setItem('playerTag', playerTag);
         localStorage.setItem('startTrophies', startTrophies);
         localStorage.setItem('currentDay', currentDay);
@@ -190,7 +168,7 @@
         let diffTime = nowTime - startTime;
         let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-        let playerData = await fetchTrophiesFromAPI(playerTag, apiKey);
+        let playerData = await fetchTrophies(playerTag);
         if(!playerData) return;
 
         if (elapsedDays > currentDay && currentDay <= 30) {
@@ -269,7 +247,7 @@
     }
 
     function resetAll() {
-        if(confirm("Tu veux reset le tracker ?")) {
+        if(confirm("Tu veux reset le tracker et changer de compte ?")) {
             localStorage.clear();
             location.reload();
         }
