@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brawl Stars Auto Tracker</title>
+    <style>
+        :root {
+            --bg-color: #121214;
+            --card-color: #1a1a1e;
+            --text-color: #ffffff;
+            --accent-color: #f3af19;
+            --green: #2ecc71;
+            --red: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { width: 100%; max-width: 450px; }
+        h1 { text-align: center; color: var(--accent-color); text-shadow: 2px 2px 0px #000; margin-bottom: 5px; }
+        .subtitle { text-align: center; font-size: 14px; color: #aaa; margin-bottom: 25px; }
+
+        .box {
+            background-color: var(--card-color);
+            border: 2px solid #2a2a30;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        label { display: block; font-weight: bold; margin-bottom: 8px; color: var(--accent-color); }
+        input { width: 100%; padding: 12px; background: #2a2a30; border: 2px solid #3a3a42; border-radius: 8px; color: white; font-size: 16px; box-sizing: border-box; margin-bottom: 12px; }
+        button { width: 100%; padding: 12px; background: var(--accent-color); border: none; border-radius: 8px; color: #000; font-size: 16px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        
+        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 25px; }
+        .day-card { background-color: var(--card-color); border: 2px solid #2a2a30; border-radius: 8px; padding: 10px 5px; text-align: center; font-size: 12px; font-weight: bold; }
+        .day-card .num { font-size: 14px; display: block; margin-bottom: 4px; }
+        .day-card .diff { font-size: 10px; opacity: 0.9; }
+
+        .green { background-color: var(--green) !important; color: white; border-color: #27ae60; }
+        .red { background-color: var(--red) !important; color: white; border-color: #c0392b; }
+        .loading { text-align: center; color: var(--accent-color); font-weight: bold; display: none; margin-bottom: 15px; }
+        
+        .final-result { font-size: 20px; text-align: center; font-weight: bold; padding: 15px; border-radius: 8px; margin-top: 10px; }
+        .btn-reset { background: #3a3a42; color: #bbb; margin-top: 20px; font-size: 12px; padding: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>BRAWL AUTO RUSH</h1>
+    <div class="subtitle">Objectif : +1000 tr/jour (Auto à minuit)</div>
+
+    <div id="loadingStatus" class="loading">Mise à jour des trophées en cours...</div>
+
+    <div id="setupBox" class="box">
+        <label for="playerTag">Ton Identifiant (#ID Brawl Stars) :</label>
+        <input type="text" id="playerTag" placeholder="Ex: 2QJ880V9P">
+        <button onclick="startAutoChallenge()">Lancer le défi automatique</button>
+    </div>
+
+    <div id="statsBox" class="box" style="display: none;">
+        <div style="font-size: 18px; margin-bottom: 10px; color: var(--accent-color);">Statut du rush :</div>
+        <div>Trophées au départ : <span id="statStart" style="font-weight:bold;">0</span></div>
+        <div>Trophées en direct : <span id="statCurrent" style="font-weight:bold;">0</span></div>
+        <div id="finalResult" class="final-result"></div>
+    </div>
+
+    <div class="grid" id="calendarGrid"></div>
+
+    <button id="btnReset" class="btn-reset" onclick="resetAll()" style="display: none;">Changer de compte / Reset</button>
+</div>
+
+<script>
+    let playerTag = "";
+    let startTrophies = 0;
+    let currentDay = 1;
+    let history = {}; 
+    let startDate = "";
+
+    window.onload = function() {
+        if(localStorage.getItem('playerTag')) {
+            playerTag = localStorage.getItem('playerTag');
+            startTrophies = parseInt(localStorage.getItem('startTrophies'));
+            currentDay = parseInt(localStorage.getItem('currentDay')) || 1;
+            history = JSON.parse(localStorage.getItem('history')) || {};
+            startDate = localStorage.getItem('startDate');
+            
+            document.getElementById('setupBox').style.display = 'none';
+            document.getElementById('statsBox').style.display = 'block';
+            document.getElementById('btnReset').style.display = 'block';
+            
+            // À chaque ouverture, on vérifie si on a changé de jour pour mettre à jour
+            checkAndUpdateTrophies();
+        } else {
+            renderCalendar();
+        }
+    }
+
+    // Fonction magique : appelle l'API libre BrawlAPI sans clé !
+    async function fetchTrophies(tag) {
+        // Nettoyage du tag au cas où il y a un #
+        let cleanTag = tag.replace('#', '').toUpperCase().trim();
+        try {
+            document.getElementById('loadingStatus').style.display = 'block';
+            let response = await fetch(`https://api.brawlapi.com/v1/player?tag=${cleanTag}`);
+            let data = await response.json();
+            document.getElementById('loadingStatus').style.display = 'none';
+            return data.trophies;
+        } catch (error) {
+            document.getElementById('loadingStatus').style.display = 'none';
+            alert("Erreur de connexion avec BrawlAPI. Vérifie ton ID ou ta connexion.");
+            return null;
+        }
+    }
+
+    async function startAutoChallenge() {
+        let tagInput = document.getElementById('playerTag').value;
+        if(!tagInput) return alert("Mets ton ID Brawl Stars !");
+        
+        let trophies = await fetchTrophies(tagInput);
+        if(!trophies) return; // Erreur API
+
+        playerTag = tagInput.replace('#', '').toUpperCase().trim();
+        startTrophies = trophies;
+        currentDay = 1;
+        history = {};
+        
+        // On fixe le jour de départ (aujourd'hui sans les heures)
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        startDate = today.getTime();
+
+        localStorage.setItem('playerTag', playerTag);
+        localStorage.setItem('startTrophies', startTrophies);
+        localStorage.setItem('currentDay', currentDay);
+        localStorage.setItem('history', JSON.stringify(history));
+        localStorage.setItem('startDate', startDate);
+
+        document.getElementById('setupBox').style.display = 'none';
+        document.getElementById('statsBox').style.display = 'block';
+        document.getElementById('btnReset').style.display = 'block';
+
+        updateUI(startTrophies);
+        renderCalendar();
+    }
+
+    async function checkAndUpdateTrophies() {
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        let nowTime = today.getTime();
+        let startTime = parseInt(startDate);
+
+        // Calculer combien de jours se sont écoulés depuis le début
+        let diffTime = nowTime - startTime;
+        let elapsedDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Ex: Jour 1, Jour 2...
+
+        // Si on a avancé d'un ou plusieurs jours par rapport à notre dernier "currentDay" enregistré
+        if (elapsedDays > currentDay && currentDay <= 30) {
+            let actualTrophies = await fetchTrophies(playerTag);
+            if(actualTrophies) {
+                // On remplit les jours manqués ou le jour actuel avec les tr récupérés à minuit
+                for(let i = currentDay; i < elapsedDays && i <= 30; i++) {
+                    history[i] = actualTrophies;
+                }
+                currentDay = elapsedDays > 30 ? 31 : elapsedDays;
+                
+                localStorage.setItem('history', JSON.stringify(history));
+                localStorage.setItem('currentDay', currentDay);
+                updateUI(actualTrophies);
+                renderCalendar();
+            }
+        } else {
+            // Même jour : on met juste à jour tes trophées actuels "en direct" pour info
+            let actualTrophies = await fetchTrophies(playerTag);
+            if(actualTrophies) updateUI(actualTrophies);
+            renderCalendar();
+        }
+    }
+
+    function updateUI(liveTrophies) {
+        document.getElementById('statStart').innerText = startTrophies + " tr";
+        document.getElementById('statCurrent').innerText = liveTrophies + " tr";
+        
+        let lastDayEntered = currentDay - 1;
+        if(currentDay > 30 || lastDayEntered === 30) {
+            let finalScore = history[30] || liveTrophies;
+            let totalGagne = finalScore - startTrophies;
+            let finalBox = document.getElementById('finalResult');
+            if(totalGagne >= 30000) {
+                finalBox.innerText = `Gagné ! +${totalGagne} tr du futur 🔥`;
+                finalBox.className = "final-result green";
+            } else {
+                finalBox.innerText = `Échec ! +${totalGagne} tr / 30000 💀`;
+                finalBox.className = "final-result red";
+            }
+        } else {
+            document.getElementById('finalResult').innerText = "Défi en cours...";
+            document.getElementById('finalResult').className = "final-result";
+        }
+    }
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendarGrid');
+        grid.innerHTML = '';
+        
+        for(let i = 1; i <= 30; i++) {
+            const card = document.createElement('div');
+            card.className = 'day-card';
+            
+            let numSpan = document.createElement('span');
+            numSpan.className = 'num';
+            numSpan.innerText = 'J' + i;
+            card.appendChild(numSpan);
+            
+            if(history[i]) {
+                let base = (i === 1) ? startTrophies : history[i-1];
+                let diff = history[i] - base;
+                
+                let diffSpan = document.createElement('span');
+                diffSpan.className = 'diff';
+                diffSpan.innerText = (diff >= 0 ? '+' : '') + diff;
+                card.appendChild(diffSpan);
+                
+                if(diff >= 1000) {
+                    card.classList.add('green');
+                } else {
+                    card.classList.add('red');
+                }
+            } else {
+                if(i === currentDay && localStorage.getItem('playerTag')) {
+                    card.style.border = "2px solid var(--accent-color)";
+                } else {
+                    card.style.opacity = '0.4';
+                }
+            }
+            grid.appendChild(card);
+        }
+    }
+
+    function resetAll() {
+        if(confirm("Tu veux arrêter ce défi et changer de compte ?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+</script>
+</body>
+</html>
